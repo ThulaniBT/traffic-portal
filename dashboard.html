@@ -172,7 +172,7 @@
         // Supabase Initialization
         const supabaseUrl = 'https://zqumonwgogduccorkbhp.supabase.co';
         const supabaseKey = 'sb_publishable_c5HmmGQbDnnawu6fU1Vkog_3-L-wl_J';
-        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
         // Initialize Map (Dark Mode)
         const map = L.map('map', { zoomControl: false }).setView([-26.102500, 28.045000], 14);
@@ -202,7 +202,7 @@
 
         async function loadMapData() {
             // Load traffic lights
-            const { data: lights, error } = await supabase.from('traffic_lights').select('*');
+            const { data: lights, error } = await supabaseClient.from('traffic_lights').select('*');
             if (error) console.error(error);
 
             lights.forEach(light => {
@@ -258,14 +258,14 @@
         }
 
         // Real-Time Subscriptions
-        supabase.channel('public:reports')
+        supabaseClient.channel('public:reports')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reports' }, payload => {
                 console.log('New report received!', payload);
                 loadReports(); // Refresh the sidebar
             })
             .subscribe();
 
-        supabase.channel('public:traffic_lights')
+        supabaseClient.channel('public:traffic_lights')
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'traffic_lights' }, payload => {
                 console.log('Traffic light status changed!', payload);
                 const updatedLight = payload.new;
