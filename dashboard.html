@@ -220,7 +220,7 @@
         }
 
         async function loadReports() {
-            const { data: reports, error } = await supabase
+            const { data: reports, error } = await supabaseClient
                 .from('reports')
                 .select(`
                     id, issue_type, created_at, status,
