@@ -25,6 +25,22 @@
         .stat-box .label { font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; }
 
         /* Alert Feed */
+        /* Toast Notification */
+        .dispatch-toast {
+            position: fixed; top: 20px; right: -400px;
+            background: #e53935; color: white; padding: 16px 24px;
+            border-radius: 8px; font-weight: bold; font-size: 14px;
+            z-index: 2000; box-shadow: 0 4px 12px rgba(229, 57, 53, 0.4);
+            transition: right 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex; align-items: center; gap: 10px;
+        }
+        .dispatch-toast.show { right: 20px; }
+        .alert-item.read { opacity: 0.5; }
+        .alert-item.read:hover { opacity: 0.8; }
+        .new-badge { background: #0b57d0; color: white; padding: 2px 6px; border-radius: 8px; font-size: 9px; font-weight: bold; text-transform: uppercase; margin-left: 8px; }
+        .btn-reset { background: transparent; border: 1px solid #555; color: #aaa; border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; text-transform: uppercase; font-weight: bold; float: right; margin-left: auto; }
+        .btn-reset:hover { background: #333; color: #fff; }
+        .feed-filter { background: #121212; border: 1px solid #333; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; outline: none; float: right; margin-left: auto; }
         .feed-header { padding: 15px 20px; font-size: 12px; font-weight: bold; color: #888; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #333; }
         .alert-list { flex: 1; overflow-y: auto; }
         .alert-item { padding: 16px 20px; border-bottom: 1px solid #2a2a2a; cursor: pointer; transition: background 0.2s; display: flex; gap: 15px; align-items: flex-start; }
@@ -83,11 +99,13 @@
     </style>
 </head>
 <body>
+    <!-- Notification Toast -->
+    <div id="dispatch-toast" class="dispatch-toast">⚠️ New Alert Received!</div>
 
     <!-- Sidebar Feed -->
     <div class="sidebar">
         <div class="header">
-            <h1>Traffic Command <span>12 LIVE</span></h1>
+            <h1>Traffic Command <span id="live-badge">LIVE</span> <button class="btn-reset" onclick="resetDatabase()">Reset All</button></h1>
             <div class="stats">
                 <div class="stat-box critical">
                     <div class="num">3</div>
@@ -103,7 +121,7 @@
                 </div>
             </div>
         </div>
-        <div class="feed-header">Priority Alerts Queue</div>
+        <div class="feed-header">Priority Alerts Queue <select id="feed-filter" class="feed-filter" onchange="loadReports()"><option value="all">Sort: All</option><option value="unread">Sort: Unread</option><option value="read">Sort: Read</option></select></div>
         <div class="alert-list">
             
             <!-- Alert 1 -->
