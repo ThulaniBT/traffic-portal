@@ -6,17 +6,36 @@
     <title>Dispatch Command Center</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body, html { width: 100%; width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; height: 100vh; background: #121212; color: #fff; display: flex; overflow: hidden; }
+        body, html { 
+            margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background: #121212; color: #fff; 
+        }
+        
+        .layout-wrapper {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+        }
         
         /* Layout */
-        .sidebar { width: 380px; background: #1e1e1e; border-right: 1px solid #333; display: flex; flex-direction: column; z-index: 10; box-shadow: 2px 0 10px rgba(0,0,0,0.5); }
-        .map-container { flex: 1; position: relative; }
+        .sidebar { 
+            width: 400px; min-width: 400px; max-width: 400px;
+            background: #1e1e1e; border-right: 1px solid #333; 
+            display: flex; flex-direction: column; z-index: 10; box-shadow: 2px 0 10px rgba(0,0,0,0.5); 
+        }
+        .map-container { 
+            flex-grow: 1; position: relative; height: 100vh; width: calc(100vw - 400px);
+        }
         #map { width: 100%; height: 100%; background: #000; }
         
         /* Top Bar in Sidebar */
         .header { padding: 20px; border-bottom: 1px solid #333; background: #252525; }
-        .header h1 { margin: 0; font-size: 20px; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .header h1 { margin: 0; font-size: 20px; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 10px; justify-content: space-between; }
         .header h1 span { background: #e53935; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .btn-reset { background: transparent; border: 1px solid #555; color: #aaa; border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; text-transform: uppercase; font-weight: bold; }
+        .btn-reset:hover { background: #333; color: #fff; }
+        
         .stats { display: flex; gap: 15px; margin-top: 15px; }
         .stat-box { flex: 1; background: #121212; padding: 10px; border-radius: 8px; border: 1px solid #333; text-align: center; }
         .stat-box .num { font-size: 24px; font-weight: bold; margin-bottom: 4px; }
@@ -25,6 +44,24 @@
         .stat-box .label { font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; }
 
         /* Alert Feed */
+        .feed-header { padding: 15px 20px; font-size: 12px; font-weight: bold; color: #888; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+        .feed-filter { background: #121212; border: 1px solid #333; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; outline: none; }
+        .alert-list { flex: 1; overflow-y: auto; }
+        .alert-item { padding: 16px 20px; border-bottom: 1px solid #2a2a2a; cursor: pointer; transition: background 0.2s; display: flex; gap: 15px; align-items: flex-start; }
+        .alert-item:hover, .alert-item.active { background: #2c2c2c; border-left: 4px solid #e53935; padding-left: 16px; }
+        .alert-item.warning:hover, .alert-item.warning.active { border-left: 4px solid #ffb300; padding-left: 16px; }
+        .alert-item.read { opacity: 0.5; }
+        .alert-item.read:hover { opacity: 0.8; }
+        
+        .alert-icon { font-size: 20px; background: rgba(255,255,255,0.1); width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; flex-shrink: 0; }
+        .alert-content { flex: 1; }
+        .alert-title { margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #fff; display: flex; align-items: center; justify-content: space-between; }
+        .new-badge { background: #0b57d0; color: white; padding: 2px 6px; border-radius: 8px; font-size: 9px; font-weight: bold; text-transform: uppercase; }
+        .alert-meta { display: flex; justify-content: space-between; font-size: 12px; color: #aaa; margin-bottom: 8px; }\
+        .alert-type { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; }\
+        .type-critical { background: rgba(229, 57, 53, 0.2); color: #ef5350; }\
+        .type-warning { background: rgba(255, 179, 0, 0.2); color: #ffca28; }\
+
         /* Toast Notification */
         .dispatch-toast {
             position: fixed; top: 20px; right: -400px;
@@ -35,28 +72,6 @@
             display: flex; align-items: center; gap: 10px;
         }
         .dispatch-toast.show { right: 20px; }
-        .alert-item.read { opacity: 0.5; }
-        .alert-item.read:hover { opacity: 0.8; }
-        .new-badge { background: #0b57d0; color: white; padding: 2px 6px; border-radius: 8px; font-size: 9px; font-weight: bold; text-transform: uppercase; margin-left: 8px; }
-        .btn-reset { background: transparent; border: 1px solid #555; color: #aaa; border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; text-transform: uppercase; font-weight: bold; float: right; margin-left: auto; }
-        .btn-reset:hover { background: #333; color: #fff; }
-        .feed-filter { background: #121212; border: 1px solid #333; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; outline: none; float: right; margin-left: auto; }
-        .feed-header { padding: 15px 20px; font-size: 12px; font-weight: bold; color: #888; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #333; }
-        .alert-list { flex: 1; overflow-y: auto; }
-        .alert-item { padding: 16px 20px; border-bottom: 1px solid #2a2a2a; cursor: pointer; transition: background 0.2s; display: flex; gap: 15px; align-items: flex-start; }
-        .alert-item:hover, .alert-item.active { background: #2c2c2c; border-left: 4px solid #e53935; padding-left: 16px; }
-        .alert-item.warning:hover, .alert-item.warning.active { border-left: 4px solid #ffb300; padding-left: 16px; }
-        
-        .alert-icon { font-size: 20px; background: rgba(255,255,255,0.1); width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; flex-shrink: 0; }
-        .alert-content { flex: 1; }
-        .alert-title { margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #fff; }
-        .alert-meta { display: flex; justify-content: space-between; font-size: 12px; color: #aaa; margin-bottom: 8px; }
-        .alert-type { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; }
-        .type-critical { background: rgba(229, 57, 53, 0.2); color: #ef5350; }
-        .type-warning { background: rgba(255, 179, 0, 0.2); color: #ffca28; }
-        
-        .alert-reports { font-size: 12px; color: #888; display: flex; align-items: center; gap: 4px; }
-        .alert-reports span { background: #333; padding: 2px 6px; border-radius: 10px; color: #fff; font-weight: bold; }
 
         /* Map UI Overlay */
         .map-controls { position: absolute; top: 20px; right: 20px; z-index: 1000; display: flex; gap: 10px; }
@@ -72,11 +87,13 @@
         .action-btn:hover { opacity: 0.9; }
         .btn-dispatch { background: #0b57d0; }
         .btn-escalate { background: #333; border: 1px solid #555; }
+        .btn-resolve { background: #28a745; margin-top: 10px; width: 100%; }
 
         /* Pulsing Map Markers */
         .pulse-marker { width: 24px; height: 24px; border-radius: 50%; background: #e53935; box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.7); animation: pulse-red 1.5s infinite; cursor: pointer; border: 2px solid #fff; }
         .pulse-marker.warning { background: #ffb300; box-shadow: 0 0 0 0 rgba(255, 179, 0, 0.7); animation: pulse-yellow 2s infinite; }
         .pulse-marker.active { border-color: #0b57d0; border-width: 3px; transform: scale(1.2); }
+        .tl-marker { font-size: 12px; cursor: pointer; filter: drop-shadow(0 0 2px rgba(0,0,0,0.5)); }
 
         @keyframes pulse-red {
             0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.7); }
@@ -88,220 +105,34 @@
             70% { transform: scale(1); box-shadow: 0 0 0 15px rgba(255, 179, 0, 0); }
             100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 179, 0, 0); }
         }
+
+        /* Mobile View Response */
         @media (max-width: 768px) {
-            body { flex-direction: column-reverse; width: 100vw; }
-            .sidebar { width: 100%; height: 40vh; flex: none; z-index: 1000; box-shadow: 0 -2px 10px rgba(0,0,0,0.5); }
-            .map-container { height: 60vh; flex: none; width: 100%; }
-            .action-panel { width: 90%; bottom: 10px; padding: 15px; }
-            .map-controls { top: 10px; right: 10px; flex-direction: column; }
-        }
-    </style>
-    </style>
-</head>
-<body>
-    <!-- Notification Toast -->
-    <div id="dispatch-toast" class="dispatch-toast">⚠️ New Alert Received!</div>
-
-    <!-- Sidebar Feed -->
-    <div class="sidebar">
-        <div class="header">
-            <h1>Traffic Command <span id="live-badge">LIVE</span> <button class="btn-reset" onclick="resetDatabase()">Reset All</button></h1>
-            <div class="stats">
-                <div class="stat-box critical">
-                    <div class="num">3</div>
-                    <div class="label">Code Red</div>
-                </div>
-                <div class="stat-box warning">
-                    <div class="num">9</div>
-                    <div class="label">Power Out</div>
-                </div>
-                <div class="stat-box">
-                    <div class="num">5</div>
-                    <div class="label">Pointsmen</div>
-                </div>
-            </div>
-        </div>
-        <div class="feed-header">Priority Alerts Queue <select id="feed-filter" class="feed-filter" onchange="loadReports()"><option value="all">Sort: All</option><option value="unread">Sort: Unread</option><option value="read">Sort: Read</option></select></div>
-        <div class="alert-list">
-            
-            <!-- Alert 1 -->
-            <div class="alert-item active">
-                <div class="alert-icon">✂️</div>
-                <div class="alert-content">
-                    <h3 class="alert-title">William Nicol & Sandton Dr</h3>
-                    <div class="alert-meta">
-                        <span class="alert-type type-critical">Cable Theft</span>
-                        <span>2 mins ago</span>
-                    </div>
-                    <div class="alert-reports">
-                        <span>7</span> drivers reported this. High congestion.
-                    </div>
-                </div>
-            </div>
-
-            <!-- Alert 2 -->
-            <div class="alert-item warning">
-                <div class="alert-icon">🔌</div>
-                <div class="alert-content">
-                    <h3 class="alert-title">Grayston Dr & Rivonia Rd</h3>
-                    <div class="alert-meta">
-                        <span class="alert-type type-warning">Power Cut</span>
-                        <span>12 mins ago</span>
-                    </div>
-                    <div class="alert-reports">
-                        <span>4</span> drivers reported this. Zone 4 Shedding.
-                    </div>
-                </div>
-            </div>
-
-            <!-- Alert 3 -->
-            <div class="alert-item">
-                <div class="alert-icon">💥</div>
-                <div class="alert-content">
-                    <h3 class="alert-title">Republic Rd & Jan Smuts</h3>
-                    <div class="alert-meta">
-                        <span class="alert-type type-critical">Accident</span>
-                        <span>18 mins ago</span>
-                    </div>
-                    <div class="alert-reports">
-                        <span>2</span> drivers reported this.
-                    </div>
-                </div>
-            </div>
-
-        </div>
-    </div>
-
-    <!-- Map Area -->
-    <div class="map-container">
-        <div class="map-controls">
-            <button class="toggle-btn active">Live View</button>
-            <button class="toggle-btn">Analytics Heatmap</button>
-        </div>
-        
-        <div id="map"></div>
-        
-        <!-- Action Panel -->
-        <div class="action-panel show">
-            <h3 class="action-title">William Nicol & Sandton Dr</h3>
-            <p style="color: #aaa; font-size: 13px; margin: 0 0 15px 0;">Major arterial route. 7 active reports. Cable theft suspected.</p>
-            <div class="action-buttons">
-                <button class="action-btn btn-dispatch">Deploy Pointsman</button>
-                <button class="action-btn btn-escalate">Escalate to JRA</button>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script>
-        // Supabase Initialization
-        const supabaseUrl = 'https://zqumonwgogduccorkbhp.supabase.co';
-        const supabaseKey = 'sb_publishable_c5HmmGQbDnnawu6fU1Vkog_3-L-wl_J';
-        const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
-
-        // Initialize Map (Dark Mode)
-        const map = L.map('map', { zoomControl: false }).setView([-26.102500, 28.045000], 14);
-        
-        // CartoDB Dark Matter Base Map
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '© OpenStreetMap, © CartoDB',
-            subdomains: 'abcd',
-            maxZoom: 20
-        }).addTo(map);
-
-        // Custom Pulsing Icons
-        const criticalIcon = L.divIcon({ className: 'pulse-marker active', iconSize: [24, 24] });
-        const warningIcon = L.divIcon({ className: 'pulse-marker warning', iconSize: [24, 24] });
-        const accidentIcon = L.divIcon({ className: 'pulse-marker', iconSize: [24, 24] });
-        const onlineIcon = L.divIcon({ html: '🟢', className: 'tl-marker', iconSize: [12, 12], iconAnchor: [6, 6] }); // Small green dot for online
-
-        let markers = {};
-
-        function getIconForStatus(status) {
-            if (status === 'online') return onlineIcon;
-            if (status === 'Cable Theft') return criticalIcon;
-            if (status === 'Power Cut') return warningIcon;
-            if (status === 'Accident') return accidentIcon;
-            return warningIcon;
-        }
-
-        async function loadMapData() {
-            // Load traffic lights
-            const { data: lights, error } = await supabaseClient.from('traffic_lights').select('*');
-            if (error) console.error(error);
-
-            lights.forEach(light => {
-                const marker = L.marker([light.lat, light.lng], { icon: getIconForStatus(light.status) }).addTo(map);
-                markers[light.id] = marker;
-                
-                marker.on('click', () => {
-                    document.querySelector('.action-panel').classList.add('show');
-                    document.querySelector('.action-title').innerText = light.name;
-                });
-            });
-
-            // Load reports to feed
-            loadReports();
-        }
-
-        async function loadReports() {
-            const { data: reports, error } = await supabaseClient
-                .from('reports')
-                .select(`
-                    id, issue_type, created_at, status,
-                    traffic_lights ( name )
-                `)
-                .order('created_at', { ascending: false })
-                .limit(10);
-            
-            if (error) {
-                console.error(error);
-                return;
-            }
-
-            const list = document.querySelector('.alert-list');
-            list.innerHTML = ''; // Clear mock data
-
-            reports.forEach(report => {
-                const timeAgo = Math.floor((new Date() - new Date(report.created_at)) / 60000);
-                const isCritical = report.issue_type === 'Cable Theft' || report.issue_type === 'Accident';
-                const emoji = report.issue_type === 'Cable Theft' ? '✂️' : report.issue_type === 'Power Cut' ? '🔌' : '💥';
-                
-                list.innerHTML += `
-                    <div class="alert-item ${isCritical ? 'active' : 'warning'}">
-                        <div class="alert-icon">${emoji}</div>
-                        <div class="alert-content">
-                            <h3 class="alert-title">${report.traffic_lights.name}</h3>
-                            <div class="alert-meta">
-                                <span class="alert-type ${isCritical ? 'type-critical' : 'type-warning'}">${report.issue_type}</span>
-                                <span>${timeAgo < 1 ? 'Just now' : timeAgo + ' mins ago'}</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
-        }
-
-        // Real-Time Subscriptions
-        supabaseClient.channel('public:reports')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reports' }, payload => {
-                console.log('New report received!', payload);
-                loadReports(); // Refresh the sidebar
-            })
-            .subscribe();
-
-        supabaseClient.channel('public:traffic_lights')
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'traffic_lights' }, payload => {
-                console.log('Traffic light status changed!', payload);
-                const updatedLight = payload.new;
-                if (markers[updatedLight.id]) {
-                    markers[updatedLight.id].setIcon(getIconForStatus(updatedLight.status));
-                }
-            })
-            .subscribe();
-
-        loadMapData();
-    </script>
-</body>
-</html>
+            .layout-wrapper { flex-direction: column-reverse; }
+            .sidebar { width: 100vw; min-width: 100vw; max-width: 100vw; height: 45vh; z-index: 1000; box-shadow: 0 -2px 10px rgba(0,0,0,0.5); }
+            .map-container { height: 55vh; width: 100vw; }
+            .action-panel { width: 90%; bottom: 10px; padding: 15px; box-sizing: border-box; }\
+            .map-controls { top: 10px; right: 10px; flex-direction: column; }\
+        }\
+    </style>\
+</head>\
+<body>\
+\
+    <!-- Notification Toast -->\
+    <div id=\"dispatch-toast\" class=\"dispatch-toast\">⚠️ New Alert Received!</div>\
+\
+    <div class=\"layout-wrapper\">\
+        <!-- Sidebar Feed -->\
+        <div class=\"sidebar\">\
+            <div class=\"header\">\
+                <h1>\
+                    Traffic Command <span id=\"live-badge\">LIVE</span>\
+                    <button class=\"btn-reset\" onclick=\"resetDatabase()\">Reset All</button>\
+                </h1>\
+                <div class=\"stats\">\
+                    <div class=\"stat-box critical\">\
+                        <div class=\"num\" id=\"stat-red\">0</div>\
+                        <div class=\"label\">Code Red</div>\
+                    </div>\
+                    <div class=\"stat-box warning\">\
+                        <div class=\"num\" id=\"stat-warn\">0</div>\n                        <div class=\"label\">Power Out</div>\n                    </div>\n                    <div class=\"stat-box\">\n                        <div class=\"num\" id=\"stat-online\">0</div>\n                        <div class=\"label\">Online</div>\n                    </div>\n                </div>\n            </div>\n            <div class=\"feed-header\">\n                Priority Alerts Queue\n                <select id=\"feed-filter\" class=\"feed-filter\" onchange=\"loadReports()\">\n                    <option value=\"all\">Sort: All</option>\n                    <option value=\"unread\">Sort: Unread</option>\n                    <option value=\"read\">Sort: Read</option>\n                </select>\n            </div>\n            <div class=\"alert-list\" id=\"alert-list\">\n                <div style=\"padding: 20px; color: #888; text-align: center;\">Loading real-time data...</div>\n            </div>\n        </div>\n\n        <!-- Map Area -->\n        <div class=\"map-container\">\n            <div class=\"map-controls\">\n                <button class=\"toggle-btn active\">Live View</button>\n                <button class=\"toggle-btn\">Analytics Heatmap</button>\n            </div>\n            \n            <div id=\"map\"></div>\n            \n            <!-- Action Panel -->\n            <div class=\"action-panel\" id=\"action-panel\">\n                <h3 class=\"action-title\" id=\"action-title\">Intersection</h3>\n                <p id=\"action-desc\" style=\"color: #aaa; font-size: 13px; margin: 0 0 15px 0;\">Loading context...</p>\n                <div class=\"action-buttons\">\n                    <button class=\"action-btn btn-dispatch\" onclick=\"markResolved()\">Mark Resolved (Fix)</button>\n                </div>\n            </div>\n        </div>\n    </div>\n\n    <script src=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\"></script>\n    <script src=\"https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2\"></script>\n    <script>\n        // Supabase Initialization\n        const supabaseUrl = \'https://zqumonwgogduccorkbhp.supabase.co\';\n        const supabaseKey = \'sb_publishable_c5HmmGQbDnnawu6fU1Vkog_3-L-wl_J\';\n        const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);\n\n        // Track read reports locally for each dispatcher session\n        let readReports = new Set(JSON.parse(localStorage.getItem(\'readReports\') || \'[]\'));\n\n        // On page load, check if user is logged in\n        document.addEventListener(\'DOMContentLoaded\', async () => {\n            const { data: { user }, error } = await supabaseClient.auth.getUser();\n            if (!user) {\n                // No user logged in, redirect to auth page\n                window.location.href = \'auth.html\';\n            } else {\n                // User is logged in, load map data and reports\n                loadMapData();\n            }\n        });\n        \n        // Initialize Map (Dark Mode)\n        const map = L.map(\'map\', { zoomControl: false }).setView([-26.102500, 28.045000], 14);\n        \n        // CartoDB Dark Matter Base Map\n        L.tileLayer(\'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png\', {\n            attribution: \'© OpenStreetMap, © CartoDB\',\n            subdomains: \'abcd\',\n            maxZoom: 20\n        }).addTo(map);\n\n        // Custom Icons\n        const criticalIcon = L.divIcon({ className: \'pulse-marker active\', iconSize: [24, 24] });\n        const warningIcon = L.divIcon({ className: \'pulse-marker warning\', iconSize: [24, 24] });\n        const accidentIcon = L.divIcon({ className: \'pulse-marker\', iconSize: [24, 24] });\n        const onlineIcon = L.divIcon({ html: \'🟢\', className: \'tl-marker\', iconSize: [16, 16], iconAnchor: [8, 8] });\n\n        let markers = {};\n        let activeLightId = null;\n\n        function getIconForStatus(status) {\n            if (status === \'online\') return onlineIcon;\n            if (status === \'Cable Theft\') return criticalIcon;\n            if (status === \'Power Cut\') return warningIcon;\n            if (status === \'Accident\') return accidentIcon;\n            return warningIcon; // For \'Out of Sync\' or unknown\n        }\n\n        async function loadMapData() {\n            const { data: lights, error } = await supabaseClient.from(\'traffic_lights\').select(\'*\');\n            if (error) console.error(error);\n\n            let redCount = 0;\n            let warnCount = 0;\n            let onlineCount = 0;\n\n            // Clear existing markers before redrawing\n            Object.values(markers).forEach(marker => marker.remove());\n            markers = {}; // Reset markers object\n\n            lights.forEach(light => {\n                if (light.status === \'Cable Theft\' || light.status === \'Accident\') redCount++;\n                else if (light.status !== \'online\') warnCount++;\n                else onlineCount++;\n\n                const marker = L.marker([light.lat, light.lng], { icon: getIconForStatus(light.status) }).addTo(map);\n                markers[light.id] = marker;\n                \n                marker.on(\'click\', () => {\n                    activeLightId = light.id;\n                    document.getElementById(\'action-panel\').classList.add(\'show\');\n                    document.getElementById(\'action-title\').innerText = light.name;\n                    document.getElementById(\'action-desc\').innerText = `Current Status: ${light.status.toUpperCase()}`;\n                    map.flyTo([light.lat, light.lng], 16, { duration: 0.5 });\n                });\n            });\n\n            document.getElementById(\'stat-red\').innerText = redCount;\n            document.getElementById(\'stat-warn\').innerText = warnCount;\n            document.getElementById(\'stat-online\').innerText = onlineCount;\n\n            loadReports();\n        }\n\n        async function markResolved() {\n            if (!activeLightId) return;\n            await supabaseClient.from(\'traffic_lights\').update({ status: \'online\' }).eq(\'id\', activeLightId);\n            document.getElementById(\'action-panel\').classList.remove(\'show\');\n            activeLightId = null; // Clear active light\n        }\n        \n        async function resetDatabase() {\n            if (!confirm(\"Are you sure you want to reset ALL traffic lights to ONLINE and delete ALL reports? This cannot be undone.\")) {\n                return;\n            }\n\n            const btn = document.querySelector(\'.btn-reset\');\n            btn.innerText = \"Resetting...\";\n            btn.disabled = true;\n\n            // Delete all reports\n            const { error: rError } = await supabaseClient\n                .from(\'reports\')\n                .delete()\n                .neq(\'id\', \'00000000-0000-0000-0000-000000000000\'); // Delete all reports\n\n            // Set all traffic lights to online\n            const { error: tlError } = await supabaseClient\n                .from(\'traffic_lights\')\n                .update({ status: \'online\', last_updated: new Date().toISOString() })\n                .neq(\'status\', \'online\'); // Only update non-online ones\n            \n            if (rError) console.error(\'Reports Reset Error:\', rError);\n            if (tlError) console.error(\'Traffic Lights Reset Error:\', tlError);\n\n            // Clear local read status\n            readReports.clear();\n            localStorage.setItem(\'readReports\', \'[]\');\n            \n            btn.innerText = \"Reset All\";\n            btn.disabled = false;\n            loadMapData(); // Refresh map and reports\n        }\n\n        function showNotification(issueType, locationName) {\n            const toast = document.getElementById(\'dispatch-toast\');\n            toast.innerText = `⚠️ New Alert: ${issueType} at ${locationName}`;\n            toast.classList.add(\'show\');\n            setTimeout(() => { toast.classList.remove(\'show\'); }, 4000);\n        }\n\n        async function loadReports() {\n            const { data: reports, error } = await supabaseClient\n                .from(\'reports\')\n                .select(`\n                    id, issue_type, created_at, status, traffic_light_id,\n                    traffic_lights ( name )\n                `)\n                .order(\'created_at\', { ascending: false })\n                .limit(50);\n            \n            if (error) return console.error(error);\n\n            const list = document.getElementById(\'alert-list\');\n            list.innerHTML = \'\'; \n            \n            const filter = document.getElementById(\'feed-filter\').value;\n            let displayCount = 0;\n\n            reports.forEach(report => {\n                const isRead = readReports.has(report.id);\n                \n                // Apply filters\\\n                if (filter === \'unread\' && isRead) return;\\\n                if (filter === \'read\' && !isRead) return;\\\n                \\\n                displayCount++;\\\n\\\n                const timeAgo = Math.floor((new Date() - new Date(report.created_at)) / 60000);\\\n                const isCritical = report.issue_type === \'Cable Theft\' || report.issue_type === \'Accident\';\\\n                const emoji = report.issue_type === \'Cable Theft\' ? \'✂️\' : report.issue_type === \'Power Cut\' ? \'🔌\' : \'💥\';\\\n                \\\n                const readClass = isRead ? \'read\' : \'\';\\\n                const newBadge = !isRead ? `<span class=\"new-badge\">NEW</span>` : \'\';\\\n\\\n                list.innerHTML += `\\\n                    <div class=\"alert-item ${isCritical ? \'active\' : \'warning\'} ${readClass}\" onclick=\"focusLight(\'${report.traffic_light_id}\', \'${report.id}\')\">\\\n                        <div class=\"alert-icon\">${emoji}</div>\\\n                        <div class=\"alert-content\">\\\n                            <h3 class=\"alert-title\">${report.traffic_lights.name} ${newBadge}</h3>\\\n                            <div class=\"alert-meta\">\\\n                                <span class=\"alert-type ${isCritical ? \'type-critical\' : \'type-warning\'}\">${report.issue_type}</span>\\\n                                <span>${timeAgo < 1 ? \'Just now\' : timeAgo + \' mins ago\'}</span>\\\n                            </div>\\\n                        </div>\\\n                    </div>\\\n                `;\\\n            });\\\n            \\\n            if (displayCount === 0) {\\\n                list.innerHTML = `<div style=\"padding: 20px; color: #888; text-align: center;\">No ${filter === \'all\' ? \'recent\' : filter} alerts found.</div>`;\\\n            }\\\n            \\\n            // Update LIVE badge count to show active unread\\\n            const unreadCount = reports.filter(r => !readReports.has(r.id)).length;\\\n            document.getElementById(\'live-badge\').innerText = unreadCount > 0 ? `${unreadCount} NEW` : \'LIVE\';\\\n        }\\\n\\\n        window.focusLight = function(lightId, reportId) {\\\n            // Mark report as read locally\\\n            if (reportId) {\\\n                readReports.add(reportId);\\\n                localStorage.setItem(\'readReports\', JSON.stringify([...readReports]));\\\n                loadReports(); // Refresh list to apply \'read\' class and filter\\\n            }\\\n            \\\n            // Click the marker\\\n            const light = markers[lightId];\\\n            if (light) {\\\n                map.flyTo(light.getLatLng(), 16, { duration: 0.5 }); // Fly to the light\\\n                // Manually trigger click if needed to open action panel\\\n                // light.fire(\'click\'); // This would re-fetch, better to directly open panel\\\n            }\\\n        };\\\n\\\n        // Real-Time Subscriptions\\\n        supabaseClient.channel(\'public:reports\')\\\n            .on(\'postgres_changes\', { event: \'INSERT\', schema: \'public\', table: \'reports\' }, async payload => {\\\n                console.log(\'New report received!\', payload);\\\n                \\\n                // Fetch the light name for the notification\\\n                const { data } = await supabaseClient.from(\'traffic_lights\').select(\'name\').eq(\'id\', payload.new.traffic_light_id).single();\\\n                const locName = data ? data.name : \"an intersection\";\\\n                \\\n                showNotification(payload.new.issue_type, locName);\\\n                loadReports();\\\n            })\\\n            .subscribe();\\\n\\\n        supabaseClient.channel(\'public:traffic_lights\')\\\n            .on(\'postgres_changes\', { event: \'UPDATE\', schema: \'public\', table: \'traffic_lights\' }, payload => {\\\n                console.log(\'Traffic light status changed!\', payload);\\\n                loadMapData(); // Refresh counters and markers\\\n            })\\\n            .subscribe();\\\n\\\n        loadMapData();\\\n    </script>\\\n</body>\\\n</html>
