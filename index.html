@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Traffic Light Reporter</title>
+    
+    <!-- Leaflet Map CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body, html { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden; background: #e9ecef; }
+        
+        /* The Map */
+        #map { width: 100vw; height: 100vh; z-index: 1; }
+        
+        /* Custom Map Marker */
+        .tl-marker { font-size: 32px; text-align: center; line-height: 30px; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3)); cursor: pointer; }
+        
+        /* Bottom Slide-Up Sheet */
+        .bottom-sheet {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: #ffffff;
+            border-radius: 24px 24px 0 0;
+            padding: 24px;
+            z-index: 1000;
+            transform: translateY(120%);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 -10px 25px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+        .bottom-sheet.active { transform: translateY(0); }
+        
+        .sheet-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .sheet-title { margin: 0; font-size: 20px; color: #1a1a1a; }
+        .sheet-subtitle { margin: 4px 0 0 0; font-size: 14px; color: #666; }
+        .close-btn { background: #f0f2f5; border: none; border-radius: 50%; width: 30px; height: 30px; font-size: 16px; cursor: pointer; }
+        
+        /* Big, Driver-Friendly Buttons */
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .report-btn {
+            background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 16px;
+            padding: 16px 8px; font-size: 14px; font-weight: 600; color: #333;
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .report-btn .emoji { font-size: 28px; }
+        .report-btn:active, .report-btn:hover { background: #e9ecef; transform: scale(0.96); }
+        
+        /* Specific Button Colors on Active/Hover */
+        .btn-power:active, .btn-power:hover { border-color: #343a40; background: #e9ecef; }
+        .btn-theft:active, .btn-theft:hover { border-color: #dc3545; background: #f8d7da; color: #dc3545; }
+        .btn-crash:active, .btn-crash:hover { border-color: #fd7e14; background: #ffe8d6; color: #fd7e14; }
+        .btn-sync:active, .btn-sync:hover  { border-color: #ffc107; background: #fff3cd; color: #b08103; }
+
+        /* Success Notification Toast */
+        .toast {
+            position: fixed; top: 40px; left: 50%; transform: translate(-50%, -150px);
+            background: #28a745; color: white; padding: 16px 32px;
+            border-radius: 30px; font-weight: bold; font-size: 16px;
+            z-index: 2000; box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            white-space: nowrap;
+        }
+        .toast.show { transform: translate(-50%, 0); }
+    </style>
+</head>
+<body>
+
+    <!-- The Map -->
+    <div id="map"></div>
+
+    <!-- Success Toast -->
+    <div id="toast" class="toast">Report Sent! ✅</div>
+
+    <!-- Bottom Action Sheet -->
+    <div id="bottom-sheet" class="bottom-sheet">
+        <div class="sheet-header">
+            <div>
+                <h3 class="sheet-title" id="intersection-name">Sandton Drive & Rivonia Rd</h3>
+                <p class="sheet-subtitle">What is the issue at this intersection?</p>
+            </div>
+            <button class="close-btn" onclick="closeSheet()">✕</button>
+        </div>
+
+        <div class="btn-grid">
+            <button class="report-btn btn-power" onclick="submitReport('Power Cut')">
+                <span class="emoji">🔌</span> Power Out
+            </button>
+            <button class="report-btn btn-theft" onclick="submitReport('Cable Theft')">
+                <span class="emoji">✂️</span> Cable Theft
+            </button>
+            <button class="report-btn btn-crash" onclick="submitReport('Accident')">
+                <span class="emoji">💥</span> Accident
+            </button>
+            <button class="report-btn btn-sync" onclick="submitReport('Out of Sync')">
+                <span class="emoji">🚦</span> Flashing Red
+            </button>
+        </div>
+    </div>
+
+    <!-- Leaflet Map JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Initialize Map centered on Sandton, JHB
+        const map = L.map('map', { zoomControl: false }).setView([-26.107567, 28.056702], 15);
+        
+        // Load OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Standard Traffic Light Icon
+        const tlIcon = L.divIcon({ html: '🚦', className: 'tl-marker', iconSize: [40, 40] });
+        
+        // Reported (Red) Traffic Light Icon
+        const reportedIcon = L.divIcon({ html: '🔴', className: 'tl-marker', iconSize: [40, 40] });
+
+        // Mock Traffic Light Locations
+        const intersections = [
+            { id: 1, name: "Sandton Dr & Rivonia Rd", lat: -26.107567, lng: 28.056702 },
+            { id: 2, name: "William Nicol & Sandton Dr", lat: -26.102500, lng: 28.045000 },
+            { id: 3, name: "Grayston Dr & Rivonia Rd", lat: -26.098500, lng: 28.058000 }
+        ];
+
+        let activeMarker = null;
+
+        // Plot the traffic lights on the map
+        intersections.forEach(loc => {
+            const marker = L.marker([loc.lat, loc.lng], { icon: tlIcon }).addTo(map);
+            
+            // When a driver taps a traffic light
+            marker.on('click', () => {
+                activeMarker = marker; // Remember which one they tapped
+                
+                // Pan map slightly up so the bottom sheet doesn't cover the pin
+                map.flyTo([loc.lat - 0.003, loc.lng], 16, { duration: 0.5 });
+                
+                // Update text and show the bottom sheet
+                document.getElementById('intersection-name').innerText = loc.name;
+                document.getElementById('bottom-sheet').classList.add('active');
+            });
+        });
+
+        // Close the bottom sheet
+        function closeSheet() {
+            document.getElementById('bottom-sheet').classList.remove('active');
+        }
+
+        // Submit the report
+        function submitReport(issueType) {
+            closeSheet(); // Hide the menu
+            
+            // Change the map marker to a red dot to show it's reported
+            if(activeMarker) {
+                activeMarker.setIcon(reportedIcon);
+            }
+
+            // Show Success Toast
+            const toast = document.getElementById('toast');
+            toast.innerText = issueType + " Reported! ✅";
+            toast.classList.add('show');
+            
+            // Hide toast after 3 seconds
+            setTimeout(() => { toast.classList.remove('show'); }, 3000);
+        }
+    </script>
+</body>
+</html>
