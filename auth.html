@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dispatcher Login/Register</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /> <!-- Still needed for consistency -->
+    <style>
+        body, html {
+            margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            height: 100vh; background: #121212; color: #fff; display: flex; align-items: center; justify-content: center;
+            overflow: hidden;
+        }
+        .auth-container {
+            background: #1e1e1e; border: 1px solid #333; border-radius: 16px;
+            padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 400px; width: 90%; box-sizing: border-box;
+            text-align: center;
+        }
+        h1 { font-size: 24px; margin: 0 0 20px 0; color: #fff; }
+        .tab-buttons { display: flex; margin-bottom: 25px; }
+        .tab-button { flex: 1; padding: 10px; border: none; background: #2a2a2a; color: #888; cursor: pointer; font-size: 16px; font-weight: bold; transition: all 0.2s; }
+        .tab-button:first-child { border-radius: 8px 0 0 8px; }
+        .tab-button:last-child { border-radius: 0 8px 8px 0; }
+        .tab-button.active { background: #0b57d0; color: #fff; }
+
+        .auth-form input, .auth-form select {
+            width: calc(100% - 20px); padding: 12px 10px; margin-bottom: 15px;
+            border: 1px solid #333; background: #121212; color: #fff;
+            border-radius: 8px; font-size: 16px; outline: none;
+        }
+        .auth-form input:focus, .auth-form select:focus { border-color: #0b57d0; }
+        .auth-form button {
+            width: 100%; padding: 12px; border: none; background: #0b57d0;
+            color: #fff; border-radius: 8px; font-size: 16px; font-weight: bold;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .auth-form button:hover { background: #0044a8; }
+        .error-message { color: #e53935; margin-top: -10px; margin-bottom: 15px; font-size: 13px; }
+        .success-message { color: #28a745; margin-top: -10px; margin-bottom: 15px; font-size: 13px; }
+        .back-home { display: block; margin-top: 20px; color: #0b57d0; text-decoration: none; font-size: 14px; }
+        .back-home:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <h1>Dispatcher Access</h1>
+        
+        <div class="tab-buttons">
+            <button class="tab-button active" id="login-tab" onclick="showTab('login')">Login</button>
+            <button class="tab-button" id="register-tab" onclick="showTab('register')">Register</button>
+        </div>
+
+        <!-- Login Form -->
+        <div id="login-form" class="auth-form">
+            <input type="email" id="login-email" placeholder="Email" required>
+            <input type="password" id="login-password" placeholder="Password" required>
+            <p id="login-error" class="error-message" style="display:none;"></p>
+            <button onclick="handleLogin()">Login</button>
+        </div>
+
+        <!-- Register Form -->
+        <div id="register-form" class="auth-form" style="display:none;">
+            <input type="email" id="register-email" placeholder="Email" required>
+            <input type="password" id="register-password" placeholder="Password" required>
+            <input type="password" id="register-confirm-password" placeholder="Confirm Password" required>
+            <select id="municipality-select" required>
+                <option value="">Select Municipality</option>
+            </select>
+            <p id="register-error" class="error-message" style="display:none;"></p>
+            <p id="register-success" class="success-message" style="display:none;"></p>
+            <button onclick="handleRegister()">Register</button>
+        </div>
+
+        <a href="index.html" class="back-home">← Back to Home</a>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const supabaseUrl = 'https://zqumonwgogduccorkbhp.supabase.co';
+        const supabaseKey = 'sb_publishable_c5HmmGQbDnnawu6fU1Vkog_3-L-wl_J';
+        const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        let municipalities = [];
+
+        // On page load, load municipalities and check login status
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadMunicipalities();
+            checkLoginStatus();
+        });
+
+        async function loadMunicipalities() {
+            const { data, error } = await supabaseClient.from('municipalities').select('id, name');
+            if (error) {
+                console.error('Error loading municipalities:', error);
+                return;
+            }
+            municipalities = data;
+            const select = document.getElementById('municipality-select');
+            municipalities.forEach(muni => {
+                const option = document.createElement('option');
+                option.value = muni.id; // Store ID
+                option.innerText = muni.name;
+                select.appendChild(option);
+            });
+        }
+
+        async function checkLoginStatus() {
+            const { data: { user }, error } = await supabaseClient.auth.getUser();
+            if (user) {
+                // User is logged in, redirect to dashboard
+                window.location.href = 'dashboard.html';
+            }
+        }
+
+        function showTab(tab) {
+            document.getElementById('login-tab').classList.remove('active');
+            document.getElementById('register-tab').classList.remove('active');
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('register-form').style.display = 'none';
+            document.getElementById('login-error').style.display = 'none';
+            document.getElementById('register-error').style.display = 'none';
+            document.getElementById('register-success').style.display = 'none';
+
+            if (tab === 'login') {
+                document.getElementById('login-tab').classList.add('active');
+                document.getElementById('login-form').style.display = 'block';
+            } else {
+                document.getElementById('register-tab').classList.add('active');
+                document.getElementById('register-form').style.display = 'block';
+            }
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const errorDiv = document.getElementById('login-error');
+            errorDiv.style.display = 'none';
+            
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            if (error) {
+                errorDiv.innerText = error.message;
+                errorDiv.style.display = 'block';
+            } else {
+                window.location.href = 'dashboard.html';
+            }
+        }
+
+        async function handleRegister() {
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+            const confirmPassword = document.getElementById('register-confirm-password').value;
+            const municipalityId = document.getElementById('municipality-select').value;
+            const errorDiv = document.getElementById('register-error');
+            const successDiv = document.getElementById('register-success');
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+
+            if (password !== confirmPassword) {
+                errorDiv.innerText = 'Passwords do not match.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            if (!municipalityId) {
+                errorDiv.innerText = 'Please select your municipality.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            const { data, error } = await supabaseClient.auth.signUp({
+                email,
+                password,
+                options: {
+                    data: { municipality_id: municipalityId }
+                }
+            });
+
+            if (error) {
+                errorDiv.innerText = error.message;
+                errorDiv.style.display = 'block';
+            } else if (data.user) {
+                successDiv.innerText = 'Registration successful! Please check your email to confirm your account.';
+                successDiv.style.display = 'block';
+                document.getElementById('register-form').reset(); // Clear form
+            }
+        }
+    </script>
+</body>
+</html>
