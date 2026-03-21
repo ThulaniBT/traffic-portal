@@ -167,7 +167,13 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
+        // Supabase Initialization
+        const supabaseUrl = 'https://zqumonwgogduccorkbhp.supabase.co';
+        const supabaseKey = 'sb_publishable_c5HmmGQbDnnawu6fU1Vkog_3-L-wl_J';
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
         // Initialize Map (Dark Mode)
         const map = L.map('map', { zoomControl: false }).setView([-26.102500, 28.045000], 14);
         
@@ -182,11 +188,94 @@
         const criticalIcon = L.divIcon({ className: 'pulse-marker active', iconSize: [24, 24] });
         const warningIcon = L.divIcon({ className: 'pulse-marker warning', iconSize: [24, 24] });
         const accidentIcon = L.divIcon({ className: 'pulse-marker', iconSize: [24, 24] });
+        const onlineIcon = L.divIcon({ html: '🟢', className: 'tl-marker', iconSize: [12, 12], iconAnchor: [6, 6] }); // Small green dot for online
 
-        // Add Markers
-        L.marker([-26.102500, 28.045000], { icon: criticalIcon }).addTo(map); // William Nicol (Active)
-        L.marker([-26.098500, 28.058000], { icon: warningIcon }).addTo(map);  // Grayston
-        L.marker([-26.115000, 28.018000], { icon: accidentIcon }).addTo(map); // Republic
+        let markers = {};
+
+        function getIconForStatus(status) {
+            if (status === 'online') return onlineIcon;
+            if (status === 'Cable Theft') return criticalIcon;
+            if (status === 'Power Cut') return warningIcon;
+            if (status === 'Accident') return accidentIcon;
+            return warningIcon;
+        }
+
+        async function loadMapData() {
+            // Load traffic lights
+            const { data: lights, error } = await supabase.from('traffic_lights').select('*');
+            if (error) console.error(error);
+
+            lights.forEach(light => {
+                const marker = L.marker([light.lat, light.lng], { icon: getIconForStatus(light.status) }).addTo(map);
+                markers[light.id] = marker;
+                
+                marker.on('click', () => {
+                    document.querySelector('.action-panel').classList.add('show');
+                    document.querySelector('.action-title').innerText = light.name;
+                });
+            });
+
+            // Load reports to feed
+            loadReports();
+        }
+
+        async function loadReports() {
+            const { data: reports, error } = await supabase
+                .from('reports')
+                .select(`
+                    id, issue_type, created_at, status,
+                    traffic_lights ( name )
+                `)
+                .order('created_at', { ascending: false })
+                .limit(10);
+            
+            if (error) {
+                console.error(error);
+                return;
+            }
+
+            const list = document.querySelector('.alert-list');
+            list.innerHTML = ''; // Clear mock data
+
+            reports.forEach(report => {
+                const timeAgo = Math.floor((new Date() - new Date(report.created_at)) / 60000);
+                const isCritical = report.issue_type === 'Cable Theft' || report.issue_type === 'Accident';
+                const emoji = report.issue_type === 'Cable Theft' ? '✂️' : report.issue_type === 'Power Cut' ? '🔌' : '💥';
+                
+                list.innerHTML += `
+                    <div class="alert-item ${isCritical ? 'active' : 'warning'}">
+                        <div class="alert-icon">${emoji}</div>
+                        <div class="alert-content">
+                            <h3 class="alert-title">${report.traffic_lights.name}</h3>
+                            <div class="alert-meta">
+                                <span class="alert-type ${isCritical ? 'type-critical' : 'type-warning'}">${report.issue_type}</span>
+                                <span>${timeAgo < 1 ? 'Just now' : timeAgo + ' mins ago'}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // Real-Time Subscriptions
+        supabase.channel('public:reports')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reports' }, payload => {
+                console.log('New report received!', payload);
+                loadReports(); // Refresh the sidebar
+            })
+            .subscribe();
+
+        supabase.channel('public:traffic_lights')
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'traffic_lights' }, payload => {
+                console.log('Traffic light status changed!', payload);
+                const updatedLight = payload.new;
+                if (markers[updatedLight.id]) {
+                    markers[updatedLight.id].setIcon(getIconForStatus(updatedLight.status));
+                }
+            })
+            .subscribe();
+
+        loadMapData();
     </script>
 </body>
 </html>

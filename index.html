@@ -99,9 +99,15 @@
         </div>
     </div>
 
-    <!-- Leaflet Map JS -->
+    <!-- Supabase and Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
+        // Supabase Initialization
+        const supabaseUrl = 'https://zqumonwgogduccorkbhp.supabase.co';
+        const supabaseKey = 'sb_publishable_c5HmmGQbDnnawu6fU1Vkog_3-L-wl_J';
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
         // Initialize Map centered on Sandton, JHB
         const map = L.map('map', { zoomControl: false }).setView([-26.107567, 28.056702], 15);
         
@@ -117,39 +123,43 @@
         // Reported (Red) Traffic Light Icon
         const reportedIcon = L.divIcon({ html: '🔴', className: 'tl-marker', iconSize: [40, 40] });
 
-        // Mock Traffic Light Locations
-        const intersections = [
-            { id: 1, name: "Sandton Dr & Rivonia Rd", lat: -26.107567, lng: 28.056702 },
-            { id: 2, name: "William Nicol & Sandton Dr", lat: -26.102500, lng: 28.045000 },
-            { id: 3, name: "Grayston Dr & Rivonia Rd", lat: -26.098500, lng: 28.058000 }
-        ];
-
         let activeMarker = null;
+        let activeLightId = null;
 
-        // Plot the traffic lights on the map
-        intersections.forEach(loc => {
-            const marker = L.marker([loc.lat, loc.lng], { icon: tlIcon }).addTo(map);
-            
-            // When a driver taps a traffic light
-            marker.on('click', () => {
-                activeMarker = marker; // Remember which one they tapped
+        // Load traffic lights from Supabase
+        async function loadIntersections() {
+            const { data: intersections, error } = await supabase.from('traffic_lights').select('*');
+            if (error) {
+                console.error('Error fetching traffic lights:', error);
+                return;
+            }
+
+            intersections.forEach(loc => {
+                const icon = (loc.status === 'online') ? tlIcon : reportedIcon;
+                const marker = L.marker([loc.lat, loc.lng], { icon: icon }).addTo(map);
                 
-                // Pan map slightly up so the bottom sheet doesn't cover the pin
-                map.flyTo([loc.lat - 0.003, loc.lng], 16, { duration: 0.5 });
-                
-                // Update text and show the bottom sheet
-                document.getElementById('intersection-name').innerText = loc.name;
-                document.getElementById('bottom-sheet').classList.add('active');
+                // When a driver taps a traffic light
+                marker.on('click', () => {
+                    activeMarker = marker; // Remember which one they tapped
+                    activeLightId = loc.id; // Remember the database ID
+                    
+                    // Pan map slightly up so the bottom sheet doesn't cover the pin
+                    map.flyTo([loc.lat - 0.003, loc.lng], 16, { duration: 0.5 });
+                    
+                    // Update text and show the bottom sheet
+                    document.getElementById('intersection-name').innerText = loc.name;
+                    document.getElementById('bottom-sheet').classList.add('active');
+                });
             });
-        });
+        }
 
         // Close the bottom sheet
         function closeSheet() {
             document.getElementById('bottom-sheet').classList.remove('active');
         }
 
-        // Submit the report
-        function submitReport(issueType) {
+        // Submit the report to Supabase
+        async function submitReport(issueType) {
             closeSheet(); // Hide the menu
             
             // Change the map marker to a red dot to show it's reported
@@ -164,7 +174,21 @@
             
             // Hide toast after 3 seconds
             setTimeout(() => { toast.classList.remove('show'); }, 3000);
+
+            // Save to database!
+            if (activeLightId) {
+                // 1. Insert the report
+                await supabase.from('reports').insert([
+                    { traffic_light_id: activeLightId, issue_type: issueType, status: 'new' }
+                ]);
+
+                // 2. Update the traffic light status
+                await supabase.from('traffic_lights').update({ status: issueType }).eq('id', activeLightId);
+            }
         }
+
+        // Run on load
+        loadIntersections();
     </script>
 </body>
 </html>
