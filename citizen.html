@@ -82,6 +82,22 @@
             display: flex; align-items: center; justify-content: center;
             box-shadow: 0 4px 10px rgba(0,0,0,0.15); text-decoration: none; font-size: 20px;
         }
+
+        /* Locate Button */
+        .locate-btn {
+            position: absolute; top: 65px; right: 15px; z-index: 1000;
+            background: #fff; border: none; border-radius: 50%; width: 40px; height: 40px;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15); font-size: 20px; cursor: pointer;
+            transition: background 0.2s, transform 0.2s;
+        }
+        .locate-btn:active { background: #f0f0f0; transform: scale(0.95); }
+        .locate-btn.loading { animation: pulse 1s infinite alternate; }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0.7; }
+        }
     </style>
 </head>
 <body>
@@ -93,9 +109,11 @@
     <div class="map-legend">
         <div class="legend-item"><span class="legend-dot">🟢</span> Normal / Online</div>
         <div class="legend-item"><span class="legend-dot">🔴</span> Issue Reported</div>
+        <div class="legend-item"><span class="legend-dot">🔵</span> You</div>
     </div>
     
     <a href="index.html" class="back-btn">🏠</a>
+    <button class="locate-btn" onclick="locateUser()" title="Find My Location">📍</button>
 
     <!-- Success Toast -->
     <div id="toast" class="toast">Report Sent! ✅</div>
@@ -183,6 +201,56 @@
         // Close the bottom sheet
         function closeSheet() {
             document.getElementById('bottom-sheet').classList.remove('active');
+        }
+
+        let userMarker = null;
+
+        // Locate User Function (Requests Permission & Zones In)
+        function locateUser() {
+            const btn = document.querySelector('.locate-btn');
+            
+            if (!navigator.geolocation) {
+                alert("Geolocation is not supported by your browser");
+                return;
+            }
+
+            btn.classList.add('loading');
+            
+            // Ask for location permission and get current position
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    btn.classList.remove('loading');
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    
+                    // Fly to location (zones in)
+                    map.flyTo([lat, lng], 16, { duration: 1.5 });
+                    
+                    // Add or update user marker
+                    if (userMarker) {
+                        userMarker.setLatLng([lat, lng]);
+                    } else {
+                        // Blue dot for user
+                        const userIcon = L.divIcon({ html: '🔵', className: 'tl-marker', iconSize: [40, 40] });
+                        userMarker = L.marker([lat, lng], { icon: userIcon, zIndexOffset: 1000 }).addTo(map)
+                            .bindPopup("You are here").openPopup();
+                    }
+                },
+                (error) => {
+                    btn.classList.remove('loading');
+                    let errorMsg = "Could not get your location.";
+                    if (error.code === error.PERMISSION_DENIED) {
+                        errorMsg = "Location permission denied. Please allow location access in your browser settings to use this feature.";
+                    }
+                    alert(errorMsg);
+                    console.error('Geolocation error:', error);
+                },
+                {
+                    enableHighAccuracy: true, // Use GPS if available
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
         }
 
         // Submit the report to Supabase
