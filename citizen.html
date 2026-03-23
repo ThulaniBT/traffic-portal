@@ -14,19 +14,9 @@
         /* The Map */
         #map { width: 100vw; height: 100vh; z-index: 1; }
         
-        /* Custom Map Marker */
-        .tl-marker { 
-            font-size: 32px; text-align: center; line-height: 30px; 
-            filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3)); cursor: pointer; 
-            transition: font-size 0.2s, line-height 0.2s, margin 0.2s;
-        }
+        /* Cursor pointer for vector circles */
+        .tl-vector-marker { cursor: pointer; }
         
-        /* Map Zoom Sizing for Markers */
-        .zoom-low .tl-marker { font-size: 8px !important; line-height: 8px !important; margin-top: 16px; margin-left: 16px; }
-        .zoom-med .tl-marker { font-size: 16px !important; line-height: 16px !important; margin-top: 12px; margin-left: 12px; }
-        .zoom-high .tl-marker { font-size: 32px !important; line-height: 30px !important; margin-top: 0px; margin-left: 0px; }
-        .zoom-ultra .tl-marker { font-size: 44px !important; line-height: 42px !important; margin-top: -6px; margin-left: -6px; }
-
         /* Map Legend */
         .map-legend {
             position: absolute; top: 15px; left: 15px; z-index: 1000;
@@ -163,36 +153,14 @@
         const supabaseKey = 'sb_publishable_c5HmmGQbDnnawu6fU1Vkog_3-L-wl_J';
         const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-        // Initialize Map centered on Sandton, JHB
-        const map = L.map('map', { zoomControl: false }).setView([-26.107567, 28.056702], 15);
+        // Initialize Map centered on Sandton, JHB (preferCanvas drastically improves performance for many markers)
+        const map = L.map('map', { zoomControl: false, preferCanvas: true }).setView([-26.107567, 28.056702], 15);
         
         // Load OpenStreetMap tiles
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors',
             maxZoom: 19
         }).addTo(map);
-
-        // Update map class based on zoom level to scale markers
-        function updateMapZoomClass() {
-            const zoom = map.getZoom();
-            const mapEl = document.getElementById('map');
-            mapEl.classList.remove('zoom-low', 'zoom-med', 'zoom-high', 'zoom-ultra');
-            
-            if (zoom < 12) mapEl.classList.add('zoom-low');
-            else if (zoom < 14) mapEl.classList.add('zoom-med');
-            else if (zoom < 17) mapEl.classList.add('zoom-high');
-            else mapEl.classList.add('zoom-ultra');
-        }
-
-        // Run initially and on zoom
-        updateMapZoomClass();
-        map.on('zoomend', updateMapZoomClass);
-
-        // Standard Traffic Light Icon (Green Dot instead of Traffic Light emoji)
-        const tlIcon = L.divIcon({ html: '🟢', className: 'tl-marker', iconSize: [40, 40] });
-        
-        // Reported (Red) Traffic Light Icon
-        const reportedIcon = L.divIcon({ html: '🔴', className: 'tl-marker', iconSize: [40, 40] });
 
         let activeMarker = null;
         let activeLightId = null;
@@ -206,8 +174,19 @@
             }
 
             intersections.forEach(loc => {
-                const icon = (loc.status === 'online') ? tlIcon : reportedIcon;
-                const marker = L.marker([loc.lat, loc.lng], { icon: icon }).addTo(map);
+                const isOnline = loc.status === 'online';
+                
+                // Using Vector Circles (L.circle) instead of DOM Emojis. 
+                // Canvas vectors render 100x faster than DOM elements for map markers.
+                // Radius in meters automatically scales accurately as you zoom in/out!
+                const marker = L.circle([loc.lat, loc.lng], {
+                    radius: 35, // Size in meters
+                    color: '#ffffff', // White border
+                    weight: 2, // Border thickness
+                    fillColor: isOnline ? '#28a745' : '#dc3545', // Green if online, Red if reported
+                    fillOpacity: 0.9,
+                    className: 'tl-vector-marker' // For hover cursor
+                }).addTo(map);
                 
                 // When a driver taps a traffic light
                 marker.on('click', () => {
@@ -256,10 +235,16 @@
                     if (userMarker) {
                         userMarker.setLatLng([lat, lng]);
                     } else {
-                        // Blue dot for user
-                        const userIcon = L.divIcon({ html: '🔵', className: 'tl-marker', iconSize: [40, 40] });
-                        userMarker = L.marker([lat, lng], { icon: userIcon, zIndexOffset: 1000 }).addTo(map)
-                            .bindPopup("You are here").openPopup();
+                        // Blue vector circle for user
+                        userMarker = L.circle([lat, lng], { 
+                            radius: 40,
+                            color: '#ffffff',
+                            weight: 2,
+                            fillColor: '#007bff', // blue
+                            fillOpacity: 1,
+                            zIndexOffset: 1000,
+                            className: 'tl-vector-marker'
+                        }).addTo(map).bindPopup("You are here").openPopup();
                     }
                 },
                 (error) => {
@@ -283,9 +268,9 @@
         async function submitReport(issueType) {
             closeSheet(); // Hide the menu
             
-            // Change the map marker to a red dot to show it's reported
+            // Change the vector circle map marker to red to show it's reported
             if(activeMarker) {
-                activeMarker.setIcon(reportedIcon);
+                activeMarker.setStyle({ fillColor: '#dc3545' });
             }
 
             // Show Success Toast
