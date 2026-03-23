@@ -98,6 +98,21 @@
             0% { transform: scale(1); opacity: 1; }
             100% { transform: scale(0.9); opacity: 0.7; }
         }
+
+        /* Automatic Dark Mode */
+        @media (prefers-color-scheme: dark) {
+            body { background: #121212; color: #e0e0e0; }
+            .leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+            .bottom-sheet { background: #1a1a1a; box-shadow: 0 -10px 25px rgba(0,0,0,0.5); }
+            .sheet-title { color: #f8f9fa; }
+            .sheet-subtitle { color: #aaa; }
+            .report-btn { background: #2c2c2c; border-color: #444; color: #f8f9fa; }
+            .report-btn:active, .report-btn:hover { background: #3c3c3c; border-color: #555; }
+            .map-legend { background: rgba(30, 30, 30, 0.95); color: #f8f9fa; }
+            .close-btn { background: #333; color: #f8f9fa; }
+            .back-btn { background: #1a1a1a; }
+            .locate-btn { background: #1a1a1a; }
+        }
     </style>
 </head>
 <body>
@@ -109,6 +124,7 @@
     <div class="map-legend">
         <div class="legend-item"><span class="legend-dot">🟢</span> Normal / Online</div>
         <div class="legend-item"><span class="legend-dot">🔴</span> Issue Reported</div>
+        <div class="legend-item"><span class="legend-dot">🟠</span> In Progress</div>
         <div class="legend-item"><span class="legend-dot">🔵</span> You</div>
     </div>
     
@@ -123,12 +139,13 @@
         <div class="sheet-header">
             <div>
                 <h3 class="sheet-title" id="intersection-name">Sandton Drive & Rivonia Rd</h3>
-                <p class="sheet-subtitle">What is the issue at this intersection?</p>
+                <p class="sheet-subtitle" id="intersection-subtitle">What is the issue at this intersection?</p>
             </div>
             <button class="close-btn" onclick="closeSheet()">✕</button>
         </div>
 
-        <div class="btn-grid">
+        <!-- Normal Reporting Buttons -->
+        <div class="btn-grid" id="report-grid">
             <button class="report-btn btn-power" onclick="submitReport('Power Cut')">
                 <span class="emoji">🔌</span> Power Out
             </button>
@@ -140,6 +157,13 @@
             </button>
             <button class="report-btn btn-sync" onclick="submitReport('Out of Sync')">
                 <span class="emoji">🚦</span> Flashing Red
+            </button>
+        </div>
+
+        <!-- Confirmation Button (For already reported lights) -->
+        <div class="btn-grid" id="confirm-grid" style="display: none; grid-template-columns: 1fr;">
+            <button class="report-btn btn-sync" onclick="submitReport('Confirm')" style="padding: 24px; font-size: 18px;">
+                <span class="emoji">👍</span> I See This Too
             </button>
         </div>
     </div>
@@ -175,6 +199,12 @@
 
             intersections.forEach(loc => {
                 const isOnline = loc.status === 'online';
+                const isInProgress = loc.status === 'in_progress';
+                
+                // Determine color
+                let dotColor = '#dc3545'; // Default red (Issue Reported)
+                if (isOnline) dotColor = '#28a745'; // Green
+                else if (isInProgress) dotColor = '#fd7e14'; // Orange
                 
                 // Using Vector Circles (L.circle) instead of DOM Emojis. 
                 // Canvas vectors render 100x faster than DOM elements for map markers.
@@ -183,7 +213,7 @@
                     radius: 35, // Size in meters
                     color: '#ffffff', // White border
                     weight: 2, // Border thickness
-                    fillColor: isOnline ? '#28a745' : '#dc3545', // Green if online, Red if reported
+                    fillColor: dotColor,
                     fillOpacity: 0.9,
                     className: 'tl-vector-marker' // For hover cursor
                 }).addTo(map);
@@ -196,8 +226,35 @@
                     // Pan map slightly up so the bottom sheet doesn't cover the pin
                     map.flyTo([loc.lat - 0.003, loc.lng], 16, { duration: 0.5 });
                     
-                    // Update text and show the bottom sheet
                     document.getElementById('intersection-name').innerText = loc.name;
+                    const subtitleEl = document.getElementById('intersection-subtitle');
+                    const reportGrid = document.getElementById('report-grid');
+                    const confirmGrid = document.getElementById('confirm-grid');
+
+                    if (isOnline) {
+                        // Healthy Light -> Show reporting options
+                        subtitleEl.innerText = "What is the issue at this intersection?";
+                        reportGrid.style.display = "grid";
+                        confirmGrid.style.display = "none";
+                    } else {
+                        // Reported/In-Progress Light -> Show "I See This Too"
+                        let timeAgoText = "recently";
+                        if (loc.last_updated) {
+                            const updatedDate = new Date(loc.last_updated);
+                            const mins = Math.floor((new Date() - updatedDate) / 60000);
+                            if (mins < 60) timeAgoText = `${mins} mins ago`;
+                            else if (mins < 1440) timeAgoText = `${Math.floor(mins / 60)} hrs ago`;
+                            else timeAgoText = `${Math.floor(mins / 1440)} days ago`;
+                        }
+                        
+                        let displayStatus = loc.status === 'in_progress' ? 'Technician Dispatched' : loc.status;
+                        subtitleEl.innerHTML = `<strong>Status:</strong> ${displayStatus} (Reported ${timeAgoText})`;
+                        
+                        reportGrid.style.display = "none";
+                        confirmGrid.style.display = "grid";
+                    }
+
+                    // Show the bottom sheet
                     document.getElementById('bottom-sheet').classList.add('active');
                 });
             });
