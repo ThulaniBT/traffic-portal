@@ -15,8 +15,18 @@
         #map { width: 100vw; height: 100vh; z-index: 1; }
         
         /* Custom Map Marker */
-        .tl-marker { font-size: 32px; text-align: center; line-height: 30px; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3)); cursor: pointer; }
+        .tl-marker { 
+            font-size: 32px; text-align: center; line-height: 30px; 
+            filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3)); cursor: pointer; 
+            transition: font-size 0.2s, line-height 0.2s, margin 0.2s;
+        }
         
+        /* Map Zoom Sizing for Markers */
+        .zoom-low .tl-marker { font-size: 8px !important; line-height: 8px !important; margin-top: 16px; margin-left: 16px; }
+        .zoom-med .tl-marker { font-size: 16px !important; line-height: 16px !important; margin-top: 12px; margin-left: 12px; }
+        .zoom-high .tl-marker { font-size: 32px !important; line-height: 30px !important; margin-top: 0px; margin-left: 0px; }
+        .zoom-ultra .tl-marker { font-size: 44px !important; line-height: 42px !important; margin-top: -6px; margin-left: -6px; }
+
         /* Map Legend */
         .map-legend {
             position: absolute; top: 15px; left: 15px; z-index: 1000;
@@ -161,6 +171,22 @@
             attribution: '© OpenStreetMap contributors',
             maxZoom: 19
         }).addTo(map);
+
+        // Update map class based on zoom level to scale markers
+        function updateMapZoomClass() {
+            const zoom = map.getZoom();
+            const mapEl = document.getElementById('map');
+            mapEl.classList.remove('zoom-low', 'zoom-med', 'zoom-high', 'zoom-ultra');
+            
+            if (zoom < 12) mapEl.classList.add('zoom-low');
+            else if (zoom < 14) mapEl.classList.add('zoom-med');
+            else if (zoom < 17) mapEl.classList.add('zoom-high');
+            else mapEl.classList.add('zoom-ultra');
+        }
+
+        // Run initially and on zoom
+        updateMapZoomClass();
+        map.on('zoomend', updateMapZoomClass);
 
         // Standard Traffic Light Icon (Green Dot instead of Traffic Light emoji)
         const tlIcon = L.divIcon({ html: '🟢', className: 'tl-marker', iconSize: [40, 40] });
