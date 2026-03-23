@@ -112,6 +112,25 @@
             .close-btn { background: #333; color: #f8f9fa; }
             .back-btn { background: #1a1a1a; }
             .locate-btn { background: #1a1a1a; }
+            .filter-bar { background: rgba(30, 30, 30, 0.95); }
+            .filter-btn { color: #aaa; }
+            .filter-btn.active { background: #333; color: #f8f9fa; }
+        }
+
+        /* Filter Bar */
+        .filter-bar {
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 1000;
+            background: rgba(255, 255, 255, 0.95); padding: 4px;
+            border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            display: flex; gap: 4px;
+        }
+        .filter-btn {
+            background: transparent; border: none; padding: 8px 16px;
+            border-radius: 20px; font-weight: 600; font-size: 14px;
+            color: #666; cursor: pointer; transition: all 0.2s;
+        }
+        .filter-btn.active {
+            background: #e9ecef; color: #1a1a1a; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         }
     </style>
 </head>
@@ -119,6 +138,12 @@
 
     <!-- The Map -->
     <div id="map"></div>
+
+    <!-- Filter Bar (Top Center) -->
+    <div class="filter-bar">
+        <button id="filter-all" class="filter-btn active" onclick="setFilter('all')">All Lights</button>
+        <button id="filter-issues" class="filter-btn" onclick="setFilter('issues')">Issues Only ⚠️</button>
+    </div>
 
     <!-- Map Legend -->
     <div class="map-legend">
@@ -188,6 +213,28 @@
 
         let activeMarker = null;
         let activeLightId = null;
+        let allMarkers = []; // Store references to all markers
+        let currentFilter = 'all';
+
+        // Set map filter
+        function setFilter(filterType) {
+            currentFilter = filterType;
+            
+            // Update UI
+            document.getElementById('filter-all').classList.toggle('active', filterType === 'all');
+            document.getElementById('filter-issues').classList.toggle('active', filterType === 'issues');
+
+            // Apply filter to markers
+            allMarkers.forEach(item => {
+                if (filterType === 'issues' && item.isOnline) {
+                    map.removeLayer(item.marker); // Hide healthy lights
+                } else {
+                    if (!map.hasLayer(item.marker)) {
+                        map.addLayer(item.marker); // Show all others
+                    }
+                }
+            });
+        }
 
         // Load traffic lights from Supabase
         async function loadIntersections() {
@@ -201,22 +248,31 @@
                 const isOnline = loc.status === 'online';
                 const isInProgress = loc.status === 'in_progress';
                 
-                // Determine color
-                let dotColor = '#dc3545'; // Default red (Issue Reported)
-                if (isOnline) dotColor = '#28a745'; // Green
-                else if (isInProgress) dotColor = '#fd7e14'; // Orange
+                // Determine color and size (make issues slightly larger to stand out more)
+                let dotColor = '#dc3545'; // Default red
+                let radius = 45; // Default radius for issues
+
+                if (isOnline) {
+                    dotColor = '#28a745'; // Green
+                    radius = 35; // Normal size
+                }
+                else if (isInProgress) {
+                    dotColor = '#fd7e14'; // Orange
+                    radius = 45; // Larger
+                }
                 
-                // Using Vector Circles (L.circle) instead of DOM Emojis. 
-                // Canvas vectors render 100x faster than DOM elements for map markers.
-                // Radius in meters automatically scales accurately as you zoom in/out!
+                // Using Vector Circles
                 const marker = L.circle([loc.lat, loc.lng], {
-                    radius: 35, // Size in meters
+                    radius: radius, // Size in meters
                     color: '#ffffff', // White border
-                    weight: 2, // Border thickness
+                    weight: isOnline ? 2 : 3, // Thicker border for issues
                     fillColor: dotColor,
-                    fillOpacity: 0.9,
-                    className: 'tl-vector-marker' // For hover cursor
+                    fillOpacity: isOnline ? 0.7 : 0.9, // Dim healthy lights slightly
+                    className: 'tl-vector-marker'
                 }).addTo(map);
+
+                // Save to array for filtering later
+                allMarkers.push({ marker, isOnline, loc });
                 
                 // When a driver taps a traffic light
                 marker.on('click', () => {
